@@ -8,6 +8,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>مرتبات العمال</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="المرتبات">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -393,6 +399,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
   });
 
   // ---------- تشغيل ----------
+  if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js').catch(function () { }); } catch (e) { } }
   if (!CFG.url || CFG.url.indexOf('__SB_') === 0) { $app.innerHTML = '<div class="empty">التطبيق لسه ما اتربطش بقاعدة البيانات.</div>'; return; }
   if (load('w_ref')) { S.ref = load('w_ref'); boot(); } else viewLogin();
 })();
