@@ -96,7 +96,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
     admin_only: 'ده للأدمن بس.', not_yours: 'تقدر تعدّل وتلغي القيود اللي سجّلتها إنت بس.', old_month: 'مينفعش تعدّل أو تسجّل في شهر قديم.',
     future_date: 'التاريخ لا يكون في المستقبل.', future_month: 'شهر لسه ما جاش.', bad_amount: 'المبلغ غير صحيح.', bad_kind: 'نوع الحركة غير صحيح.',
     before_start: 'التاريخ قبل بداية العامل.', worker_ended: 'العامل متوقف من الشهر ده.', no_worker: 'العامل مش موجود.', no_entry: 'القيد مش موجود.',
-    entry_voided: 'القيد ده ملغي بالفعل.', name_exists: 'الاسم موجود بالفعل.', nothing_to_reset: 'الرصيد صفر أصلًا.', cannot_stop_self: 'مينفعش توقف حسابك.', no_user: 'المستخدم مش موجود.'
+    entry_voided: 'القيد ده ملغي بالفعل.', name_exists: 'الاسم موجود بالفعل.', nothing_to_reset: 'الرصيد صفر أصلًا.', cannot_stop_self: 'مينفعش توقف حسابك.', no_user: 'المستخدم مش موجود.', has_entries: 'العامل ده عليه حركات فمينفعش يتحذف. استخدم "إيقاف" عشان يفضل تاريخه محفوظ.'
   };
   function $(s, r) { return (r || document).querySelector(s); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -258,7 +258,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
     var us = S.data.users, ws = S.data.workers;
     $app.innerHTML = '<div class="hd"><h1>لوحة الأدمن</h1><span class="chip" style="background:#F3E9CF;color:#7A5600">وليد فقط</span></div>' +
       '<div class="box"><div style="display:flex;justify-content:space-between;align-items:center"><h3>العمال والمرتبات</h3><button class="lnk" data-act="addworker">+ إضافة عامل</button></div>' +
-      (ws.length ? ws.map(function (w) { return '<div class="l"><span class="n">' + esc(w.name) + (w.end_month ? ' <span class="x">(متوقف)</span>' : '') + '</span><span class="x">' + num(w.salary) + ' ج</span><button class="lnk" data-act="salary" data-id="' + w.id + '">تعديل</button><button class="lnk" data-act="endw" data-id="' + w.id + '" data-e="' + (w.end_month ? '0' : '1') + '">' + (w.end_month ? 'تفعيل' : 'إيقاف') + '</button></div>'; }).join('') : '<div class="x">لسه مفيش عمال.</div>') + '</div>' +
+      (ws.length ? ws.map(function (w) { return '<div class="l"><span class="n">' + esc(w.name) + (w.end_month ? ' <span class="x">(متوقف)</span>' : '') + '</span><span class="x">' + num(w.salary) + ' ج</span><button class="lnk" data-act="salary" data-id="' + w.id + '">تعديل</button><button class="lnk" data-act="endw" data-id="' + w.id + '" data-e="' + (w.end_month ? '0' : '1') + '">' + (w.end_month ? 'تفعيل' : 'إيقاف') + '</button><button class="lnk" style="color:#B3261E" data-act="delw" data-id="' + w.id + '">حذف</button></div>'; }).join('') : '<div class="x">لسه مفيش عمال.</div>') + '</div>' +
       '<div class="box"><h3>الإخوة (الحسابات)</h3><div class="x" style="font-size:12px;line-height:1.7">اضغط على الحالة أو الصلاحية عشان تغيّرها.</div>' +
       us.map(function (u) {
         var me = u.id === S.me.id;
@@ -277,6 +277,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
       case 'worker_add': t = 'أضاف عامل ' + esc(n.name) + ' بمرتب ' + num(n.salary); break;
       case 'salary_set': t = 'غيّر مرتب ' + esc(o.name) + ': ' + num(o.salary) + ' ← ' + num(n.salary) + ' من ' + monLabel(n.from); break;
       case 'worker_end': t = (n.end ? 'أوقف' : 'فعّل') + ' العامل ' + esc(o.name); break;
+      case 'worker_delete': t = 'حذف العامل ' + esc(o.name); break;
       case 'worker_reset': t = 'صفّر رصيد ' + esc(o.name) + ' (كان ' + num(o.remaining) + ')'; break;
       case 'user_set': t = 'عدّل حساب ' + esc(o.user) + ': ' + (n.active ? 'فعّال' : 'موقوف') + '، إضافة عمال: ' + (n.can_manage ? 'مسموح' : 'غير مسموح'); break;
       default: t = esc(l.action);
@@ -388,6 +389,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
     else if (a === 'addworker') workerForm();
     else if (a === 'salary') { if (!S.data.workers) rpc('w_workers').then(function (w) { S.data.workers = w; salaryForm(id); }); else salaryForm(id); }
     else if (a === 'endw') { var stopIt = b.getAttribute('data-e') === '1'; if (confirm(stopIt ? 'إيقاف العامل (المرتب مش هيتحسب من الشهر ده)؟' : 'تفعيل العامل تاني؟')) act(function () { return rpc('w_set_worker_end', { p_worker: id, p_end: stopIt ? cairoToday() : undefined }); }, '✔ تمّ.').then(function (r) { if (r) go('admin'); }); }
+    else if (a === 'delw') { var dw = (S.data.workers || []).filter(function (x) { return x.id === id; })[0]; if (dw && confirm('حذف العامل "' + dw.name + '" نهائياً؟ (مسموح بس لو ماعليهوش أي حركات)')) act(function () { return rpc('w_delete_worker', { p_worker: id }); }, '✔ اتحذف.').then(function (r) { if (r) { S.data.workers = null; go('admin'); } }); }
     else if (a === 'uman' || a === 'uact') {
       var u = S.data.users.filter(function (x) { return x.id === id; })[0]; if (!u) return;
       var act2 = a === 'uact' ? { act: !u.active, man: u.can_manage } : { act: u.active, man: !u.can_manage };
