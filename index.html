@@ -96,7 +96,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
     admin_only: 'ده للأدمن بس.', not_yours: 'تقدر تعدّل وتلغي القيود اللي سجّلتها إنت بس.', old_month: 'مينفعش تعدّل أو تسجّل في شهر قديم.',
     future_date: 'التاريخ لا يكون في المستقبل.', future_month: 'شهر لسه ما جاش.', bad_amount: 'المبلغ غير صحيح.', bad_kind: 'نوع الحركة غير صحيح.',
     before_start: 'التاريخ قبل بداية العامل.', worker_ended: 'العامل متوقف من الشهر ده.', no_worker: 'العامل مش موجود.', no_entry: 'القيد مش موجود.',
-    entry_voided: 'القيد ده ملغي بالفعل.', name_exists: 'الاسم موجود بالفعل.', nothing_to_reset: 'الرصيد صفر أصلًا.', cannot_stop_self: 'مينفعش توقف حسابك.', no_user: 'المستخدم مش موجود.', has_entries: 'العامل ده عليه حركات فمينفعش يتحذف. استخدم "إيقاف" عشان يفضل تاريخه محفوظ.'
+    entry_voided: 'القيد ده ملغي بالفعل.', name_exists: 'الاسم موجود بالفعل.', nothing_to_reset: 'الرصيد صفر أصلًا.', cannot_stop_self: 'مينفعش توقف حسابك.', no_user: 'المستخدم مش موجود.', bad_pin: 'الرقم السري غلط.', too_many: 'محاولات غلط كتير. استنى 10 دقايق.'
   };
   function $(s, r) { return (r || document).querySelector(s); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -250,7 +250,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
       '<div class="r sum"><span>المستحق</span><b>' + num(a.due) + '</b></div>' +
       '<div class="r"><span>المسحوب (دفعات)</span><b class="neg">−' + num(a.payment) + '</b></div>' +
       '<div class="rem"><span style="font-weight:600">المتبقي ' + g[0] + '</span><b>' + num(Math.abs(a.remaining)) + ' <span style="font-size:14px">ج</span></b></div></div>' +
-      (canManage() ? '<div class="list" style="margin-top:10px"><button class="ghost" data-act="salary" data-id="' + a.worker.id + '">تعديل المرتب</button></div>' : '') +
+      (canManage() ? '<div class="list" style="margin-top:10px"><button class="ghost" data-act="salary" data-id="' + a.worker.id + '">تعديل المرتب</button><button class="danger" data-act="delw" data-id="' + a.worker.id + '" data-n="' + esc(a.worker.name) + '">حذف العامل</button></div>' : '') +
       '<div class="sec">حركة الشهر</div>' +
       (a.entries.length ? '<div class="list">' + a.entries.map(function (e) { return entryRow(e, false); }).join('') + '</div>' : '<div class="empty">مفيش حركة في الشهر ده.</div>') + navBar(true);
   }
@@ -357,6 +357,20 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
       if (r) { m.remove(); S.data.workers = null; refresh(); }
     });
   }
+  function delForm(id, name) {
+    var m = sheet('<h2>حذف العامل: ' + esc(name) + '</h2><div class="info" style="background:#F7DEDC;color:#B3261E">هيتحذف العامل <b>وكل حركاته ومرتباته</b> نهائياً من الحسابات. نسخة كاملة بتتحفظ في سجل الأدمن.</div>' +
+      '<div class="fld"><label for="d_p">الرقم السري للحذف</label><input id="d_p" class="inp" type="password" inputmode="numeric" autocomplete="off" style="direction:ltr;text-align:right"></div>' +
+      '<div style="display:flex;gap:10px;padding:16px 20px 0"><button class="danger" data-busy id="d_ok" style="flex:1">حذف نهائي</button><button class="ghost" id="d_c" style="width:110px">إلغاء</button></div>');
+    $('#d_c', m).addEventListener('click', function () { m.remove(); });
+    $('#d_ok', m).addEventListener('click', async function () {
+      var pin = $('#d_p', m).value; if (!pin) { toast('اكتب الرقم السري.'); return; }
+      var r = await act(function () { return rpc('w_delete_worker', { p_worker: id, p_pin: pin }); });
+      if (!r) return;
+      if (!r.r || !r.r.ok) { toast(ERR[(r.r && r.r.error) || ''] || 'الرقم السري غلط.', 4500); return; }
+      toast('✔ اتحذف العامل.'); m.remove(); S.data.workers = null; go(S.tab === 'account' ? 'workers' : S.tab);
+    });
+    setTimeout(function () { var x = $('#d_p', m); if (x) x.focus(); }, 50);
+  }
   function resetPick() {
     var ws = (S.data.workers || []).filter(function (w) { return Number(w.remaining) !== 0; });
     if (!ws.length) { toast('مفيش عامل رصيده مش صفر.'); return; }
@@ -389,7 +403,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
     else if (a === 'addworker') workerForm();
     else if (a === 'salary') { if (!S.data.workers) rpc('w_workers').then(function (w) { S.data.workers = w; salaryForm(id); }); else salaryForm(id); }
     else if (a === 'endw') { var stopIt = b.getAttribute('data-e') === '1'; if (confirm(stopIt ? 'إيقاف العامل (المرتب مش هيتحسب من الشهر ده)؟' : 'تفعيل العامل تاني؟')) act(function () { return rpc('w_set_worker_end', { p_worker: id, p_end: stopIt ? cairoToday() : undefined }); }, '✔ تمّ.').then(function (r) { if (r) go('admin'); }); }
-    else if (a === 'delw') { var dw = (S.data.workers || []).filter(function (x) { return x.id === id; })[0]; if (dw && confirm('حذف العامل "' + dw.name + '" نهائياً؟ (مسموح بس لو ماعليهوش أي حركات)')) act(function () { return rpc('w_delete_worker', { p_worker: id }); }, '✔ اتحذف.').then(function (r) { if (r) { S.data.workers = null; go('admin'); } }); }
+    else if (a === 'delw') delForm(id, b.getAttribute('data-n') || ((S.data.workers || []).filter(function (x) { return x.id === id; })[0] || {}).name);
     else if (a === 'uman' || a === 'uact') {
       var u = S.data.users.filter(function (x) { return x.id === id; })[0]; if (!u) return;
       var act2 = a === 'uact' ? { act: !u.active, man: u.can_manage } : { act: u.active, man: !u.can_manage };
