@@ -96,7 +96,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
     admin_only: 'ده للأدمن بس.', not_yours: 'تقدر تعدّل وتلغي القيود اللي سجّلتها إنت بس.', old_month: 'مينفعش تعدّل أو تسجّل في شهر قديم.',
     future_date: 'التاريخ لا يكون في المستقبل.', future_month: 'شهر لسه ما جاش.', bad_amount: 'المبلغ غير صحيح.', bad_kind: 'نوع الحركة غير صحيح.',
     before_start: 'التاريخ قبل بداية العامل.', worker_ended: 'العامل متوقف من الشهر ده.', no_worker: 'العامل مش موجود.', no_entry: 'القيد مش موجود.',
-    entry_voided: 'القيد ده ملغي بالفعل.', name_exists: 'الاسم موجود بالفعل.', nothing_to_reset: 'الرصيد صفر أصلًا.', cannot_stop_self: 'مينفعش توقف حسابك.', no_user: 'المستخدم مش موجود.', bad_pin: 'الرقم السري غلط.', too_many: 'محاولات غلط كتير. استنى 10 دقايق.'
+    entry_voided: 'القيد ده ملغي بالفعل.', name_exists: 'الاسم موجود بالفعل.', bad_day: 'اليوم لازم يكون من 1 لـ 31.', nothing_to_reset: 'الرصيد صفر أصلًا.', cannot_stop_self: 'مينفعش توقف حسابك.', no_user: 'المستخدم مش موجود.', bad_pin: 'الرقم السري غلط.', too_many: 'محاولات غلط كتير. استنى 10 دقايق.'
   };
   function $(s, r) { return (r || document).querySelector(s); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -243,14 +243,15 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
       '<button data-act="mon" data-d="1" aria-label="الشهر التالي"' + (canNext ? '' : ' disabled') + '><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B6B70" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button></div>' +
       '<div class="card">' +
       '<div class="r"><span>رصيد مرحّل (' + (Number(a.opening) >= 0 ? 'له' : 'عليه') + ')</span><b>' + num(a.opening) + '</b></div>' +
-      '<div class="r"><span>المرتب الشهري</span><b>' + num(a.salary) + '</b></div>' +
+      '<div class="r"><span>' + (a.salary_days ? 'المرتب (' + a.salary_days + ' يوم من 30 · بدأ يوم ' + a.worker.start_day + ')' : 'المرتب الشهري') + '</span><b>' + num(a.salary) + '</b></div>' +
+      (a.salary_days ? '<div class="x" style="font-size:12px;padding:0 4px 6px;color:#5B6B70">المرتب الكامل ' + num(a.salary_full) + ' ج، محسوب بنسبة الأيام في الشهر الأول بس.</div>' : '') +
       '<div class="r"><span>مكافآت</span><b class="pos">+' + num(a.bonus) + '</b></div>' +
       '<div class="r"><span>خصومات</span><b class="neg">−' + num(a.deduction) + '</b></div>' +
       (Number(a.adjust) ? '<div class="r"><span>تسويات</span><b>' + (Number(a.adjust) > 0 ? '+' : '−') + num(Math.abs(a.adjust)) + '</b></div>' : '') +
       '<div class="r sum"><span>المستحق</span><b>' + num(a.due) + '</b></div>' +
       '<div class="r"><span>المسحوب (دفعات)</span><b class="neg">−' + num(a.payment) + '</b></div>' +
       '<div class="rem"><span style="font-weight:600">المتبقي ' + g[0] + '</span><b>' + num(Math.abs(a.remaining)) + ' <span style="font-size:14px">ج</span></b></div></div>' +
-      (canManage() ? '<div class="list" style="margin-top:10px"><button class="ghost" data-act="salary" data-id="' + a.worker.id + '">تعديل المرتب</button><button class="danger" data-act="delw" data-id="' + a.worker.id + '" data-n="' + esc(a.worker.name) + '">حذف العامل</button></div>' : '') +
+      (canManage() ? '<div class="list" style="margin-top:10px"><button class="ghost" data-act="salary" data-id="' + a.worker.id + '">تعديل المرتب</button>' + (mth === String(a.worker.start_month).slice(0, 10) && (isAdmin() || mth === cm) ? '<button class="ghost" data-act="startday" data-id="' + a.worker.id + '" data-d="' + a.worker.start_day + '">تعديل يوم البداية</button>' : '') + '<button class="danger" data-act="delw" data-id="' + a.worker.id + '" data-n="' + esc(a.worker.name) + '">حذف العامل</button></div>' : '') +
       '<div class="sec">حركة الشهر</div>' +
       (a.entries.length ? '<div class="list">' + a.entries.map(function (e) { return entryRow(e, false); }).join('') + '</div>' : '<div class="empty">مفيش حركة في الشهر ده.</div>') + navBar(true);
   }
@@ -332,13 +333,24 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
   function workerForm() {
     var m = sheet('<h2>إضافة عامل</h2><div class="fld"><label for="w_n">الاسم</label><input id="w_n" class="inp" autocomplete="off"></div>' +
       '<div class="fld"><label for="w_s">المرتب الشهري (جنيه)</label><input id="w_s" class="inp amt" inputmode="decimal" autocomplete="off" placeholder="0"></div>' +
+      '<div class="fld"><label for="w_d">بدأ الشغل يوم كام في الشهر؟ (1 = من أول الشهر)</label><input id="w_d" class="inp amt" inputmode="numeric" autocomplete="off" value="1"></div>' +
+      '<div class="info" id="w_pv">المرتب كامل (30 يوم).</div>' +
       (isAdmin() ? '<div class="fld"><label for="w_m">يبدأ من شهر (الأدمن فقط)</label><input id="w_m" type="month" class="inp" value="' + cairoToday().slice(0, 7) + '"></div>' : '') +
       '<div style="display:flex;gap:10px;padding:16px 20px 0"><button class="big" data-busy id="w_ok">حفظ</button><button class="ghost" id="w_c" style="width:110px">إلغاء</button></div>');
     $('#w_c', m).addEventListener('click', function () { m.remove(); });
+    function pv() {
+      var sal = parseFloat(String($('#w_s', m).value).replace(/[^\d.]/g, '')), d = parseInt(String($('#w_d', m).value).replace(/[^\d]/g, ''), 10);
+      var box = $('#w_pv', m); if (!(d >= 1 && d <= 31)) { box.textContent = 'اكتب يوم من 1 لـ 31.'; return; }
+      var days = Math.max(1, Math.min(30, 31 - d));
+      box.innerHTML = days === 30 ? 'المرتب كامل (30 يوم).' : 'هيشتغل <b>' + days + ' يوم من 30</b> في الشهر الأول' + (sal >= 0 ? ' = <b>' + num(Math.round(sal * days / 30 * 100) / 100) + ' ج</b>' : '') + '. من الشهر الجاي المرتب كامل.';
+    }
+    $('#w_s', m).addEventListener('input', pv); $('#w_d', m).addEventListener('input', pv);
     $('#w_ok', m).addEventListener('click', async function () {
       var nm = $('#w_n', m).value.trim(), sal = parseFloat(String($('#w_s', m).value).replace(/[^\d.]/g, '')), mo = $('#w_m', m) ? $('#w_m', m).value : '';
+      var sd = parseInt(String($('#w_d', m).value).replace(/[^\d]/g, ''), 10);
       if (nm.length < 2) { toast('اكتب اسم العامل.'); return; } if (!(sal >= 0)) { toast('اكتب المرتب.'); return; }
-      var r = await act(function () { return rpc('w_add_worker', { p_name: nm, p_salary: sal, p_start: mo ? mo + '-01' : undefined }); }, '✔ اتضاف العامل.');
+      if (!(sd >= 1 && sd <= 31)) { toast('اكتب يوم البداية من 1 لـ 31.'); return; }
+      var r = await act(function () { return rpc('w_add_worker', { p_name: nm, p_salary: sal, p_start: mo ? mo + '-01' : undefined, p_start_day: sd }); }, '✔ اتضاف العامل.');
       if (r) { m.remove(); S.data.workers = null; refresh(); }
     });
   }
@@ -401,6 +413,10 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)
     else if (a === 'acct') go('account', { worker: id });
     else if (a === 'mon') { var cur = String(S.data.acct.month).slice(0, 10); go('account', { worker: S.view.worker, month: addMonths(cur, parseInt(b.getAttribute('data-d'), 10)) }); }
     else if (a === 'addworker') workerForm();
+    else if (a === 'startday') {
+      var cd = b.getAttribute('data-d') || '1', nd = prompt('بدأ الشغل يوم كام في الشهر؟ (1 لـ 31)', cd);
+      if (nd !== null) { var ndn = parseInt(String(nd).replace(/[^\d]/g, ''), 10); if (!(ndn >= 1 && ndn <= 31)) toast('اكتب يوم من 1 لـ 31.'); else act(function () { return rpc('w_set_worker_start_day', { p_worker: id, p_day: ndn }); }, '✔ اتعدّل يوم البداية.').then(function (r) { if (r) { S.data.workers = null; refresh(); } }); }
+    }
     else if (a === 'salary') { if (!S.data.workers) rpc('w_workers').then(function (w) { S.data.workers = w; salaryForm(id); }); else salaryForm(id); }
     else if (a === 'endw') { var stopIt = b.getAttribute('data-e') === '1'; if (confirm(stopIt ? 'إيقاف العامل (المرتب مش هيتحسب من الشهر ده)؟' : 'تفعيل العامل تاني؟')) act(function () { return rpc('w_set_worker_end', { p_worker: id, p_end: stopIt ? cairoToday() : undefined }); }, '✔ تمّ.').then(function (r) { if (r) go('admin'); }); }
     else if (a === 'delw') delForm(id, b.getAttribute('data-n') || ((S.data.workers || []).filter(function (x) { return x.id === id; })[0] || {}).name);
